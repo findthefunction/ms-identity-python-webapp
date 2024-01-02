@@ -66,14 +66,42 @@ def call_downstream_api():
     token = auth.get_token_for_user(app_config.SCOPE)
     if "error" in token:
         return redirect(url_for("login"))
+    
     # Use access token to call downstream api
     api_result = requests.get(
         app_config.ENDPOINT,
         headers={'Authorization': 'Bearer ' + token['access_token']},
         timeout=30,
     ).json()
-    return render_template('display.html', result=api_result)
 
+    # Call SharePoint API to get site_id
+    sharepoint_site_url = "https://graph.microsoft.com/v1.0/sites?$search=\"bfdjango\""
+    sharepoint_site_result = requests.get(
+        sharepoint_site_url,
+        headers={'Authorization': 'Bearer ' + token['access_token']},
+        timeout=30,
+    ).json()
+
+    # Extract SharePoint site_id
+    sharepoint_site_id = sharepoint_site_result.get('value', [{}])[0].get('id', 'Not found')
+    api_result['sharepoint_site_id'] = sharepoint_site_id
+
+    # Call SharePoint API to get drive_id
+    if sharepoint_site_id != 'Not found':
+        sharepoint_drive_url = f"https://graph.microsoft.com/v1.0/sites/{sharepoint_site_id}/drives"
+        sharepoint_drive_result = requests.get(
+            sharepoint_drive_url,
+            headers={'Authorization': 'Bearer ' + token['access_token']},
+            timeout=30,
+        ).json()
+
+        # Extract SharePoint drive_id
+        sharepoint_drive_id = sharepoint_drive_result.get('value', [{}])[0].get('id', 'Not found')
+        api_result['sharepoint_drive_id'] = sharepoint_drive_id
+    else:
+        api_result['sharepoint_drive_id'] = 'Not found'
+
+    return render_template('display.html', result=api_result)
 
 if __name__ == "__main__":
     app.run()
